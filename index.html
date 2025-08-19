@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Real-time Display</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .media-display {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .media-display img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .media-display video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .admin-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+        
+        .admin-toggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .admin-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        
+        .admin-panel.active {
+            display: flex;
+        }
+        
+        .admin-content {
+            background: #1a1a1a;
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            text-align: center;
+            min-width: 400px;
+        }
+        
+        .admin-content h2 {
+            margin-bottom: 30px;
+            color: #fff;
+            font-size: 24px;
+        }
+        
+        .control-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .control-button:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+        
+        .control-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .status-connected {
+            color: #28a745;
+        }
+        
+        .status-disconnected {
+            color: #dc3545;
+        }
+        
+        .close-admin {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 10px;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="media-display" id="mediaDisplay">
+            <div class="loading">Loading...</div>
+        </div>
+        
+        <button class="admin-toggle" onclick="toggleAdmin()">Admin</button>
+        
+        <div class="admin-panel" id="adminPanel">
+            <button class="close-admin" onclick="toggleAdmin()">&times;</button>
+            <div class="admin-content">
+                <h2>Display Control</h2>
+                <button class="control-button" id="startVideoBtn" onclick="startVideo()">
+                    Start Video Sequence
+                </button>
+                <button class="control-button" id="resetBtn" onclick="resetToFirst()">
+                    Reset to First Image
+                </button>
+                <div class="status" id="status">
+                    <div>Connection: <span id="connectionStatus" class="status-disconnected">Disconnected</span></div>
+                    <div>Current State: <span id="currentState">loading</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, off } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBN0C264FHWnKzvilkaZ0dtP8LDZoUcgIA",
+            authDomain: "hacking-a5fe5.firebaseapp.com",
+            databaseURL: "https://hacking-a5fe5-default-rtdb.firebaseio.com",
+            projectId: "hacking-a5fe5",
+            storageBucket: "hacking-a5fe5.firebasestorage.app",
+            messagingSenderId: "725582950440",
+            appId: "1:725582950440:web:0e9d8e7adf5ed4db81851d"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        const screenStateRef = ref(database, 'screenState');
+
+        // Global variables
+        let currentState = 'first';
+        let isAdminOpen = false;
+
+        // Media URLs (using actual media files instead of placeholder SVGs)
+        const mediaUrls = {
+            first: 'first.png',
+            video: 'second.mp4',
+            third: 'third.png'
+        };
+
+        // DOM elements
+        const mediaDisplay = document.getElementById('mediaDisplay');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const currentStateSpan = document.getElementById('currentState');
+        const startVideoBtn = document.getElementById('startVideoBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // Initialize the display
+        function initializeDisplay() {
+            console.log('[v0] Initializing display');
+            showMedia('first');
+            
+            // Set initial state in Firebase if it doesn't exist
+            set(screenStateRef, 'first').catch(error => {
+                console.error('[v0] Error setting initial state:', error);
+            });
+        }
+
+        // Show media based on state
+        function showMedia(state) {
+            console.log('[v0] Showing media for state:', state);
+            currentState = state;
+            currentStateSpan.textContent = state;
+            
+            mediaDisplay.innerHTML = '';
+            
+            if (state === 'video') {
+                // Create video element
+                const video = document.createElement('video');
+                video.src = mediaUrls.video;
+                video.autoplay = true;
+                video.muted = true; // Required for autoplay in most browsers
+                video.style.width = '100%';
+                video.style.height = '100%';
+                video.style.objectFit = 'contain';
+                
+                // When video ends, automatically switch to third image
+                video.addEventListener('ended', () => {
+                    console.log('[v0] Video ended, switching to third image');
+                    set(screenStateRef, 'third');
+                });
+                
+                video.addEventListener('error', (e) => {
+                    console.error('[v0] Video error:', e);
+                    // Fallback: show video placeholder image
+                    showImage(mediaUrls.video);
+                });
+                
+                mediaDisplay.appendChild(video);
+            } else {
+                // Show image
+                const imageUrl = mediaUrls[state] || mediaUrls.first;
+                showImage(imageUrl);
+            }
+            
+            updateButtonStates();
+        }
+
+        // Show image
+        function showImage(src) {
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = `Display state: ${currentState}`;
+            img.style.maxWidth = '100%';
+            img.style.maxHeight = '100%';
+            img.style.objectFit = 'contain';
+            
+            img.addEventListener('error', () => {
+                console.error('[v0] Image failed to load:', src);
+                mediaDisplay.innerHTML = `<div class="loading">Failed to load media</div>`;
+            });
+            
+            mediaDisplay.appendChild(img);
+        }
+
+        // Update button states
+        function updateButtonStates() {
+            startVideoBtn.disabled = currentState === 'video';
+            resetBtn.disabled = currentState === 'first';
+        }
+
+        // Firebase listener
+        function setupFirebaseListener() {
+            console.log('[v0] Setting up Firebase listener');
+            
+            onValue(screenStateRef, (snapshot) => {
+                const state = snapshot.val();
+                console.log('[v0] Firebase state changed:', state);
+                
+                if (state && state !== currentState) {
+                    showMedia(state);
+                }
+                
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.className = 'status-connected';
+            }, (error) => {
+                console.error('[v0] Firebase error:', error);
+                connectionStatus.textContent = 'Error';
+                connectionStatus.className = 'status-disconnected';
+            });
+        }
+
+        // Admin functions
+        window.toggleAdmin = function() {
+            isAdminOpen = !isAdminOpen;
+            const adminPanel = document.getElementById('adminPanel');
+            adminPanel.classList.toggle('active', isAdminOpen);
+        };
+
+        window.startVideo = function() {
+            console.log('[v0] Starting video sequence');
+            set(screenStateRef, 'video').catch(error => {
+                console.error('[v0] Error setting video state:', error);
+            });
+        };
+
+        window.resetToFirst = function() {
+            console.log('[v0] Resetting to first image');
+            set(screenStateRef, 'first').catch(error => {
+                console.error('[v0] Error resetting state:', error);
+            });
+        };
+
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('[v0] Page loaded, initializing...');
+            initializeDisplay();
+            setupFirebaseListener();
+        });
+
+        // Handle connection status
+        window.addEventListener('online', () => {
+            connectionStatus.textContent = 'Connected';
+            connectionStatus.className = 'status-connected';
+        });
+
+        window.addEventListener('offline', () => {
+            connectionStatus.textContent = 'Offline';
+            connectionStatus.className = 'status-disconnected';
+        });
+    </script>
+</body>
+</html>

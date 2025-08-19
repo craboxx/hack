@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Control Panel</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .status {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 30px;
+            color: #0c5460;
+        }
+        
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+        
+        .trigger-btn {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .trigger-btn:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+        
+        .trigger-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .reset-btn {
+            background: #28a745;
+            color: white;
+        }
+        
+        .reset-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+        
+        .info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            color: #856404;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Display Control Panel</h1>
+        
+        <div class="status" id="status">
+            Connecting to Firebase...
+        </div>
+        
+        <div class="button-group">
+            <button class="trigger-btn" id="triggerBtn" onclick="triggerVideo()">
+                🎥 START VIDEO SEQUENCE
+            </button>
+            
+            <button class="reset-btn" id="resetBtn" onclick="resetToFirst()">
+                🔄 RESET TO FIRST IMAGE
+            </button>
+        </div>
+        
+        <div class="info">
+            <strong>How it works:</strong><br>
+            • Click "START VIDEO SEQUENCE" to trigger video playback on all connected displays<br>
+            • Video will automatically switch to final image when complete<br>
+            • Use "RESET" to go back to the first image<br>
+            • All changes happen instantly across all connected clients
+        </div>
+        
+        <div class="log" id="log">
+            <div>Admin panel loaded...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBN0C264FHWnKzvilkaZ0dtP8LDZoUcgIA",
+            authDomain: "hacking-a5fe5.firebaseapp.com",
+            databaseURL: "https://hacking-a5fe5-default-rtdb.firebaseio.com",
+            projectId: "hacking-a5fe5",
+            storageBucket: "hacking-a5fe5.firebasestorage.app",
+            messagingSenderId: "725582950440",
+            appId: "1:725582950440:web:0e9d8e7adf5ed4db81851d"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Get DOM elements
+        const statusDiv = document.getElementById('status');
+        const triggerBtn = document.getElementById('triggerBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const logDiv = document.getElementById('log');
+
+        // Log function
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Listen for state changes to update UI
+        const screenStateRef = ref(database, 'screenState');
+        onValue(screenStateRef, (snapshot) => {
+            const state = snapshot.val() || 'first';
+            statusDiv.innerHTML = `<strong>Current State:</strong> ${state}`;
+            
+            // Update button states based on current state
+            if (state === 'third') {
+                triggerBtn.textContent = '✅ SEQUENCE COMPLETE';
+                triggerBtn.disabled = true;
+            } else {
+                triggerBtn.textContent = '🎥 START VIDEO SEQUENCE';
+                triggerBtn.disabled = false;
+            }
+            
+            addLog(`State changed to: ${state}`);
+        }, (error) => {
+            statusDiv.innerHTML = '<strong>Error:</strong> Failed to connect to Firebase';
+            addLog(`Firebase error: ${error.message}`);
+        });
+
+        // Trigger video function
+        window.triggerVideo = function() {
+            addLog('Triggering video sequence...');
+            set(ref(database, 'screenState'), 'video')
+                .then(() => {
+                    addLog('✅ Video sequence triggered successfully');
+                })
+                .catch((error) => {
+                    addLog(`❌ Error triggering video: ${error.message}`);
+                });
+        };
+
+        // Reset to first image function
+        window.resetToFirst = function() {
+            addLog('Resetting to first image...');
+            set(ref(database, 'screenState'), 'first')
+                .then(() => {
+                    addLog('✅ Reset to first image successfully');
+                })
+                .catch((error) => {
+                    addLog(`❌ Error resetting: ${error.message}`);
+                });
+        };
+
+        addLog('Firebase connection established');
+        addLog('Admin panel ready');
+    </script>
+</body>
+</html>
